@@ -1,75 +1,60 @@
-module rr_arbiter_tb();
+`timescale 1ns/1ps
 
-reg clk;       // Clock signal
-reg rst;       // Reset signal
-reg req3;      // Request signal for unit 3
-reg req2;      // Request signal for unit 2
-reg req1;      // Request signal for unit 1
-reg req0;      // Request signal for unit 0
-wire gnt3;     // Grant signal for unit 3
-wire gnt2;     // Grant signal for unit 2
-wire gnt1;     // Grant signal for unit 1
-wire gnt0;     // Grant signal for unit 0
+module tb_rr_arb;
 
-// Clock generator: toggle the clock every 1 time unit
-always #1 clk = ~clk;
+    parameter N = 4;
 
-initial begin 
-    // Create a VCD file for waveform viewing
-    $dumpfile("rr_arbiter.vcd");
-    $dumpvars();
+    logic clk;
+    logic rst_n;
+    logic [N-1:0] req;
+    logic [N-1:0] gnt;
+    logic gnt_valid;
 
-    // Initialize signals
-    clk = 0;
-    rst = 1;
-    req0 = 0;
-    req1 = 0;
-    req2 = 0;
-    req3 = 0;
+    // DUT instantiation
+    rr_arb #(N) dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .req(req),
+        .gnt(gnt),
+        .gnt_valid(gnt_valid)
+    );
 
-    // Wait for 10 time units
-    #10 rst = 0;  // Release reset
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk;   // 10ns clock period
+    end
 
-    // Generate different request patterns to test the arbiter
-    repeat(1) @(posedge clk);
-    req0 <= 1;    // Request unit 0
-    repeat(1) @(posedge clk);
-    req0 <= 0;    // Stop requesting unit 0
+    // Stimulus
+    initial begin
+        $display("Time\treq\tgnt\tptr_valid");
+        $monitor("%0t\t%b\t%b\t%b", $time, req, gnt, gnt_valid);
 
-    repeat(1) @(posedge clk);
-    req0 <= 1;    // Request unit 0 again
-    req1 <= 1;    // Request unit 1
+        // Reset
+        rst_n = 0;
+        req = 0;
+        #20;
+        rst_n = 1;
 
-    repeat(1) @(posedge clk);
-    req2 <= 1;    // Request unit 2
-    req1 <= 0;    // Stop requesting unit 1
+        // Test 1: single request
+        #10 req = 4'b0001;
+        #20 req = 4'b0010;
+        #20 req = 4'b0100;
+        #20 req = 4'b1000;
 
-    repeat(1) @(posedge clk);
-    req3 <= 1;    // Request unit 3
-    req2 <= 0;    // Stop requesting unit 2
+        // Test 2: multiple requests
+        #20 req = 4'b1011;
+        #40 req = 4'b1100;
 
-    repeat(1) @(posedge clk);
-    req3 <= 0;    // Stop requesting unit 3
+        // Test 3: all request
+        #40 req = 4'b1111;
 
-    repeat(1) @(posedge clk);
-    req0 <= 0;    // Stop requesting unit 0
+        // Test 4: random requests
+        repeat (10) begin
+            #20 req = $random;
+        end
 
-    repeat(1) @(posedge clk);
-    #10 $finish;  // End simulation after some time
-end
-
-// Instantiate the Round Robin Arbiter
-rr_arbiter U(
-    clk,
-    rst,
-    req3,
-    req2,
-    req1,
-    req0,
-    gnt3,
-    gnt2,
-    gnt1,
-    gnt0
-);
+        #100 $finish;
+    end
 
 endmodule
